@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.$executeRawUnsafe('DELETE FROM tracking_history WHERE booking_id NOT IN (SELECT id FROM bookings);'); console.log('Orphaned tracking history deleted'); } main().catch(e => console.error(e)).finally(() => prisma.$disconnect());

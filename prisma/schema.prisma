@@ -1,0 +1,989 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String                @id @default(uuid())
+  uuid                     String                @unique @default(uuid())
+  email                    String                @unique
+  password                 String
+  role                     UserRole
+  status                   String                @default("ACTIVE")
+  is_verified              Boolean               @default(false)
+  last_login               DateTime?
+  created_at               DateTime              @default(now())
+  updated_at               DateTime              @updatedAt
+  deleted_at               DateTime?
+  deleted_by               String?
+  is_deleted               Boolean               @default(false)
+  avatar                   String?
+  bank_details             String?               @db.LongText
+  notification_preferences String?               @db.LongText
+  first_name               String?
+  last_name                String?
+  phone                    String?
+  audit_logs               ActivityLog[]
+  admin                    Admin?
+  broker                   Broker?
+  customer                 Customer?
+  approved_drivers         DriverApproval[]      @relation("ApprovedByUser")
+  driver_status_history    DriverStatusHistory[] @relation("StatusChangedByUser")
+  driver                   Driver?
+  fleet_owner              FleetOwner?
+  plant_owner              PlantOwner?
+  operator                 MachineOperator?
+  wallets                  Wallet[]
+
+  @@map("users")
+}
+
+model Customer {
+  id           String    @id @default(uuid())
+  user_id      String    @unique
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+  company_name String?
+  deleted_by   String?
+  is_deleted   Boolean   @default(false)
+  tax_number   String?
+  bookings     Booking[]
+  user         User      @relation(fields: [user_id], references: [id])
+  invoices     Invoice[]
+
+  @@map("customers")
+}
+
+model Driver {
+  id                      String                @id @default(uuid())
+  user_id                 String                @unique
+  status                  String                @default("AVAILABLE")
+  license                 String?               @unique
+  pdp                     String?
+  id_document             String?
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+  deleted_at              DateTime?
+  deleted_by              String?
+  is_deleted              Boolean               @default(false)
+  fleet_owner_id          String?
+  address                 String?
+  assigned_vehicle_id     String?
+  documents               String?               @db.LongText
+  driving_category        String?
+  emergency_contact       String?               @db.LongText
+  license_expiry          DateTime?
+  national_id             String?
+  assignments             BookingAssignment[]
+  applications            DriverApplication[]
+  approval                DriverApproval?
+  documents_relation      DriverDocuments?
+  kyc                     DriverKYC?
+  photos                  DriverPhoto?
+  profile                 DriverProfile?
+  status_history          DriverStatusHistory[]
+  vehicle_relation        DriverVehicle?
+  assigned_vehicle        Vehicle?              @relation(fields: [assigned_vehicle_id], references: [id])
+  fleet_owner             FleetOwner?           @relation(fields: [fleet_owner_id], references: [id])
+  user                    User                  @relation(fields: [user_id], references: [id])
+  offers                  LoadOffer[]
+  compliance              DriverCompliance[]
+  tripPerformances        TripPerformance[]
+  paystack_recipient_code String?
+
+  @@index([assigned_vehicle_id], map: "drivers_assigned_vehicle_id_fkey")
+  @@index([fleet_owner_id], map: "drivers_fleet_owner_id_fkey")
+  @@map("drivers")
+}
+
+model FleetOwner {
+  id                      String              @id @default(uuid())
+  user_id                 String              @unique
+  company_name            String?
+  created_at              DateTime            @default(now())
+  updated_at              DateTime            @updatedAt
+  deleted_at              DateTime?
+  deleted_by              String?
+  is_deleted              Boolean             @default(false)
+  company_documents       String?             @db.LongText
+  status                  String              @default("REGISTERED")
+  address                 String?
+  location_lat            Float?
+  location_lng            Float?
+  fleet_tier              String?
+  notes                   String?
+  num_vehicles            Int?
+  operating_areas         String?
+  services_offered        String?
+  vat_number              String?
+  assignments             BookingAssignment[]
+  drivers                 Driver[]
+  user                    User                @relation(fields: [user_id], references: [id])
+  vehicles                Vehicle[]
+  offers                  LoadOffer[]
+  paystack_recipient_code String?
+
+  @@map("fleet_owners")
+}
+
+model PlantOwner {
+  id                String              @id @default(uuid())
+  user_id           String              @unique
+  company_name      String?
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+  deleted_at        DateTime?
+  deleted_by        String?
+  is_deleted        Boolean             @default(false)
+  company_documents String?             @db.LongText
+  status            String              @default("REGISTERED")
+  assignments       BookingAssignment[]
+  hire_requests     HireRequest[]
+  operators         MachineOperator[]
+  machines          Machine[]
+  user              User                @relation(fields: [user_id], references: [id])
+
+  @@map("plant_owners")
+}
+
+model Broker {
+  id           String              @id @default(uuid())
+  user_id      String              @unique
+  company_name String?
+  created_at   DateTime            @default(now())
+  updated_at   DateTime            @updatedAt
+  deleted_at   DateTime?
+  deleted_by   String?
+  is_deleted   Boolean             @default(false)
+  assignments  BookingAssignment[]
+  user         User                @relation(fields: [user_id], references: [id])
+
+  @@map("brokers")
+}
+
+model Machine {
+  id                  String              @id @default(uuid())
+  plant_owner_id      String
+  type                String
+  category            String?
+  make                String?
+  model_name          String?
+  year                Int?
+  capacity            Float?
+  hourly_rate         Float?
+  min_hire_hours      Int?
+  registration_number String              @unique
+  status              String              @default("CREATED")
+  machine_documents   String?             @db.LongText
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  is_deleted          Boolean             @default(false)
+  assignments         BookingAssignment[]
+  plant_owner         PlantOwner          @relation(fields: [plant_owner_id], references: [id])
+
+  @@index([plant_owner_id], map: "machines_plant_owner_id_fkey")
+  @@map("machines")
+}
+
+model MachineOperator {
+  id             String              @id @default(uuid())
+  user_id        String?             @unique
+  plant_owner_id String
+  name           String
+  license        String              @unique
+  status         String              @default("REGISTERED")
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+  is_deleted     Boolean             @default(false)
+  assignments    BookingAssignment[]
+  plant_owner    PlantOwner          @relation(fields: [plant_owner_id], references: [id])
+  user           User?               @relation(fields: [user_id], references: [id])
+
+  @@index([plant_owner_id], map: "machine_operators_plant_owner_id_fkey")
+  @@map("machine_operators")
+}
+
+model HireRequest {
+  id             String     @id @default(uuid())
+  booking_id     String
+  plant_owner_id String
+  status         String     @default("PENDING")
+  requested_by   String?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+  booking        Booking    @relation(fields: [booking_id], references: [id])
+  plant_owner    PlantOwner @relation(fields: [plant_owner_id], references: [id])
+
+  @@index([booking_id], map: "hire_requests_booking_id_fkey")
+  @@index([plant_owner_id], map: "hire_requests_plant_owner_id_fkey")
+  @@map("hire_requests")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  entity_type String
+  entity_id   String
+  action      String
+  old_value   String?
+  new_value   String?
+  actor_id    String?
+  created_at  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Admin {
+  id         String    @id @default(uuid())
+  user_id    String    @unique
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+  deleted_by String?
+  is_deleted Boolean   @default(false)
+  user       User      @relation(fields: [user_id], references: [id])
+
+  @@map("admins")
+}
+
+model VehicleCategory {
+  id                String    @id @default(uuid())
+  name              String    @unique
+  description       String?
+  base_price_per_km Decimal   @default(15.00) @db.Decimal(10, 2)
+  is_active         Boolean   @default(true)
+  capacity_tons     Float?    @default(1.0)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  is_deleted        Boolean   @default(false)
+  deleted_at        DateTime?
+  deleted_by        String?
+  vehicles          Vehicle[]
+
+  @@map("vehicle_categories")
+}
+
+model Vehicle {
+  id                    String              @id @default(uuid())
+  fleet_owner_id        String
+  registration_number   String              @unique
+  vehicle_type          String
+  capacity              Float?
+  status                String              @default("REGISTERED")
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+  deleted_at            DateTime?
+  category_id           String?
+  deleted_by            String?
+  is_deleted            Boolean             @default(false)
+  vehicle_documents     String?             @db.LongText
+  brand                 String?
+  fitness_document      String?
+  fitness_expiry        DateTime?
+  insurance_document    String?
+  insurance_expiry      DateTime?
+  model                 String?
+  photo_url             String?
+  registration_document String?
+  vin                   String?             @unique
+  year                  Int?
+  assignments           BookingAssignment[]
+  assigned_drivers      Driver[]
+  category              VehicleCategory?    @relation(fields: [category_id], references: [id])
+  fleet_owner           FleetOwner          @relation(fields: [fleet_owner_id], references: [id])
+
+  @@index([category_id], map: "vehicles_category_id_fkey")
+  @@index([fleet_owner_id], map: "vehicles_fleet_owner_id_fkey")
+  @@map("vehicles")
+}
+
+model Booking {
+  id                    String                 @id @default(uuid())
+  customer_id           String?
+  weight                Float
+  status                BookingStatus          @default(DRAFT)
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
+  deleted_at            DateTime?
+  cargo_category        String
+  cargo_name            String
+  deleted_by            String?
+  delivery_address      String
+  delivery_contact      String?
+  delivery_coords_lat   Float?
+  delivery_coords_lng   Float?
+  delivery_date         DateTime
+  delivery_instructions String?                @db.Text
+  description           String?                @db.Text
+  estimated_distance    Float?
+  estimated_duration    Float?
+  estimated_pickup_time DateTime?
+  current_latitude      Float?
+  current_longitude     Float?
+  route_polyline        String?                @db.Text
+  guest_company         String?
+  guest_email           String?
+  guest_phone           String?
+  is_deleted            Boolean                @default(false)
+  pickup_address        String
+  pickup_contact        String?
+  pickup_coords_lat     Float?
+  pickup_coords_lng     Float?
+  pickup_date           DateTime
+  pickup_instructions   String?                @db.Text
+  quantity              Int?
+  requested_vehicle     String?
+  volume                Float?
+  assignments           BookingAssignment[]
+  documents             BookingDocument[]
+  requirements          BookingRequirement[]
+  customer              Customer?              @relation(fields: [customer_id], references: [id])
+  applications          DriverApplication[]
+  hire_requests         HireRequest[]
+  invoices              Invoice[]
+  telemetry             LiveTrackingTelemetry?
+  quotes                Quote[]
+  trackings             TrackingHistory[]
+  offers                LoadOffer[]
+  tripPerformance       TripPerformance?
+  settlement            BookingSettlement?
+
+  @@index([status])
+  @@index([customer_id], map: "bookings_customer_id_fkey")
+  @@map("bookings")
+}
+
+model BookingRequirement {
+  id         String   @id @default(uuid())
+  booking_id String
+  tag        String
+  value      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  booking    Booking  @relation(fields: [booking_id], references: [id])
+
+  @@index([booking_id], map: "booking_requirements_booking_id_fkey")
+  @@map("booking_requirements")
+}
+
+model BookingDocument {
+  id            String    @id @default(uuid())
+  booking_id    String
+  document_type String
+  file_url      String
+  uploaded_by   String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  is_deleted    Boolean   @default(false)
+  deleted_at    DateTime?
+  deleted_by    String?
+  booking       Booking   @relation(fields: [booking_id], references: [id])
+
+  @@index([booking_id], map: "booking_documents_booking_id_fkey")
+  @@map("booking_documents")
+}
+
+model Quote {
+  id                String      @id @default(uuid())
+  booking_id        String
+  distance_cost     Decimal     @default(0.00) @db.Decimal(10, 2)
+  vehicle_rate      Decimal     @default(0.00) @db.Decimal(10, 2)
+  weight_charges    Decimal     @default(0.00) @db.Decimal(10, 2)
+  fuel_charges      Decimal     @default(0.00) @db.Decimal(10, 2)
+  insurance_charges Decimal     @default(0.00) @db.Decimal(10, 2)
+  hazard_charge     Decimal     @default(0.00) @db.Decimal(10, 2)
+  platform_fee      Decimal     @default(0.00) @db.Decimal(10, 2)
+  broker_fee        Decimal     @default(0.00) @db.Decimal(10, 2)
+  tax               Decimal     @default(0.00) @db.Decimal(10, 2)
+  discount          Decimal     @default(0.00) @db.Decimal(10, 2)
+  grand_total       Decimal     @db.Decimal(10, 2)
+  status            QuoteStatus @default(DRAFT)
+  valid_until       DateTime?
+  prepared_by       String?
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+  is_deleted        Boolean     @default(false)
+  deleted_at        DateTime?
+  deleted_by        String?
+  booking           Booking     @relation(fields: [booking_id], references: [id])
+
+  @@index([booking_id], map: "quotes_booking_id_fkey")
+  @@map("quotes")
+}
+
+model BookingAssignment {
+  id             String           @id @default(uuid())
+  booking_id     String
+  fleet_owner_id String?
+  vehicle_id     String?
+  driver_id      String?
+  assigned_by    String?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+  deleted_at     DateTime?
+  broker_id      String?
+  deleted_by     String?
+  is_deleted     Boolean          @default(false)
+  status         String           @default("ACTIVE")
+  machine_id     String?
+  operator_id    String?
+  plant_owner_id String?
+  booking        Booking          @relation(fields: [booking_id], references: [id])
+  broker         Broker?          @relation(fields: [broker_id], references: [id])
+  driver         Driver?          @relation(fields: [driver_id], references: [id])
+  fleet_owner    FleetOwner?      @relation(fields: [fleet_owner_id], references: [id])
+  machine        Machine?         @relation(fields: [machine_id], references: [id])
+  operator       MachineOperator? @relation(fields: [operator_id], references: [id])
+  plant_owner    PlantOwner?      @relation(fields: [plant_owner_id], references: [id])
+  vehicle        Vehicle?         @relation(fields: [vehicle_id], references: [id])
+
+  @@index([booking_id], map: "booking_assignments_booking_id_fkey")
+  @@index([broker_id], map: "booking_assignments_broker_id_fkey")
+  @@index([driver_id], map: "booking_assignments_driver_id_fkey")
+  @@index([fleet_owner_id], map: "booking_assignments_fleet_owner_id_fkey")
+  @@index([machine_id], map: "booking_assignments_machine_id_fkey")
+  @@index([operator_id], map: "booking_assignments_operator_id_fkey")
+  @@index([plant_owner_id], map: "booking_assignments_plant_owner_id_fkey")
+  @@index([vehicle_id], map: "booking_assignments_vehicle_id_fkey")
+  @@map("booking_assignments")
+}
+
+model Invoice {
+  id                  String        @id @default(uuid())
+  invoice_no          String        @unique
+  booking_id          String
+  customer_id         String
+  amount              Decimal       @db.Decimal(10, 2)
+  tax_amount          Decimal       @db.Decimal(10, 2)
+  total_amount        Decimal       @db.Decimal(10, 2)
+  due_date            DateTime?
+  status              InvoiceStatus @default(DRAFT)
+  file_url            String?
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+  is_deleted          Boolean       @default(false)
+  deleted_at          DateTime?
+  deleted_by          String?
+  payout_amount       Decimal       @default(0.00) @db.Decimal(10, 2)
+  platform_commission Decimal       @default(0.00) @db.Decimal(10, 2)
+  booking             Booking       @relation(fields: [booking_id], references: [id])
+  customer            Customer      @relation(fields: [customer_id], references: [id])
+  payments            Payment[]
+
+  @@index([booking_id], map: "invoices_booking_id_fkey")
+  @@index([customer_id], map: "invoices_customer_id_fkey")
+  @@map("invoices")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  amount         Decimal       @db.Decimal(10, 2)
+  status         PaymentStatus @default(PENDING)
+  payment_method String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  deleted_at     DateTime?
+  deleted_by     String?
+  invoice_id     String
+  is_deleted     Boolean       @default(false)
+  transaction_id String?       @unique
+  invoice        Invoice       @relation(fields: [invoice_id], references: [id])
+
+  @@index([invoice_id], map: "payments_invoice_id_fkey")
+  @@map("payments")
+}
+
+model Wallet {
+  id              String              @id @default(uuid())
+  user_id         String
+  balance         Decimal             @default(0.00) @db.Decimal(10, 2)
+  pending_balance Decimal             @default(0.00) @db.Decimal(10, 2)
+  created_at      DateTime            @default(now())
+  updated_at      DateTime            @updatedAt
+  deleted_at      DateTime?
+  deleted_by      String?
+  is_deleted      Boolean             @default(false)
+  transactions    WalletTransaction[]
+  user            User                @relation(fields: [user_id], references: [id])
+
+  @@index([user_id], map: "wallets_user_id_fkey")
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id           String          @id @default(uuid())
+  wallet_id    String
+  type         TransactionType
+  amount       Decimal         @db.Decimal(10, 2)
+  status       String          @default("COMPLETED")
+  created_at   DateTime        @default(now())
+  updated_at   DateTime        @updatedAt
+  description  String?
+  reference_id String?
+  wallet       Wallet          @relation(fields: [wallet_id], references: [id])
+
+  @@index([wallet_id], map: "wallet_transactions_wallet_id_fkey")
+  @@map("wallet_transactions")
+}
+
+model Commission {
+  id                String         @id @default(uuid())
+  reference_type    String
+  reference_id      String
+  earned_by_user_id String
+  commission_type   CommissionType
+  amount            Decimal        @db.Decimal(10, 2)
+  status            String         @default("PENDING")
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+  is_deleted        Boolean        @default(false)
+  deleted_at        DateTime?
+  deleted_by        String?
+
+  @@map("commissions")
+}
+
+model TrackingHistory {
+  id         String        @id @default(uuid())
+  booking_id String
+  status     BookingStatus
+  lat        Float?
+  lng        Float?
+  remarks    String?       @db.Text
+  updated_by String?
+  timestamp  DateTime      @default(now())
+  booking    Booking       @relation(fields: [booking_id], references: [id])
+
+  @@index([booking_id], map: "tracking_history_booking_id_fkey")
+  @@map("tracking_history")
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  user_id     String?
+  action      String
+  description String?  @db.Text
+  ip_address  String?
+  created_at  DateTime @default(now())
+  user        User?    @relation(fields: [user_id], references: [id])
+
+  @@index([user_id], map: "activity_logs_user_id_fkey")
+  @@map("activity_logs")
+}
+
+model Notification {
+  id              String             @id @default(uuid())
+  title           String?
+  type            NotificationType
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @updatedAt
+  content         String             @db.Text
+  error_message   String?            @db.Text
+  recipient_email String?
+  recipient_id    String?
+  recipient_phone String?
+  status          NotificationStatus @default(PENDING)
+
+  @@map("notifications")
+}
+
+model DriverApplication {
+  id         String   @id @default(uuid())
+  booking_id String
+  driver_id  String
+  status     String   @default("APPLIED")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  booking    Booking  @relation(fields: [booking_id], references: [id])
+  driver     Driver   @relation(fields: [driver_id], references: [id])
+
+  @@index([booking_id], map: "driver_applications_booking_id_fkey")
+  @@index([driver_id], map: "driver_applications_driver_id_fkey")
+  @@map("driver_applications")
+}
+
+model PlantOwnerApplication {
+  id                  String   @id @default(uuid())
+  company_name        String
+  contact_name        String
+  email               String
+  phone               String
+  national_id         String
+  equipment_type      String
+  make                String?
+  model               String?
+  registration_number String
+  year                Int?
+  base_location       String
+  company_reg_doc     String?
+  machine_photo       String?
+  status              String   @default("PENDING")
+  rejection_reason    String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  password            String?
+
+  @@map("plant_owner_applications")
+}
+
+model DriverProfile {
+  id                   String    @id @default(uuid())
+  driver_id            String    @unique
+  date_of_birth        DateTime?
+  gender               String?
+  emergency_contact    String?   @db.LongText
+  address              String?
+  base_address         String?
+  base_lat             Float?
+  base_lng             Float?
+  province             String?
+  city                 String?
+  gps_lat              Float?
+  gps_lng              Float?
+  onboarding_completed Boolean   @default(false)
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  driver               Driver    @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@map("driver_profiles")
+}
+
+model DriverPhoto {
+  id            String   @id @default(uuid())
+  driver_id     String   @unique
+  profile_photo String?
+  selfie        String?
+  vehicle_front String?
+  vehicle_back  String?
+  vehicle_left  String?
+  vehicle_right String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  driver        Driver   @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@map("driver_photos")
+}
+
+model DriverDocuments {
+  id                     String   @id @default(uuid())
+  driver_id              String   @unique
+  govt_id                String?
+  license_front          String?
+  license_back           String?
+  police_clearance       String?
+  medical_certificate    String?
+  proof_of_address       String?
+  vehicle_registration   String?
+  insurance              String?
+  roadworthy_certificate String?
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+  driver                 Driver   @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@map("driver_documents")
+}
+
+model DriverVehicle {
+  id                  String   @id @default(uuid())
+  driver_id           String   @unique
+  vehicle_type        String?
+  registration_number String?
+  vin                 String?
+  capacity            Float?
+  manufacturer        String?
+  model               String?
+  year                Int?
+  insurance           String?
+  roadworthy          String?
+  license_disc        String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  driver              Driver   @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@map("driver_vehicles")
+}
+
+model DriverKYC {
+  id                 String    @id @default(uuid())
+  driver_id          String    @unique
+  national_id        String?
+  license_number     String?
+  license_expiry     DateTime?
+  selfie_verified    Boolean   @default(false)
+  phone_verified     Boolean   @default(false)
+  gps_enabled        Boolean   @default(false)
+  terms_accepted     Boolean   @default(false)
+  training_completed Boolean   @default(false)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  driver             Driver    @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@map("driver_kyc")
+}
+
+model DriverApproval {
+  id                  String    @id @default(uuid())
+  driver_id           String    @unique
+  status              String    @default("PENDING")
+  approved_by_id      String?
+  rejection_reason    String?
+  suspension_reason   String?
+  requested_documents String?   @db.Text
+  approved_at         DateTime?
+  rejected_at         DateTime?
+  suspended_at        DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  approved_by         User?     @relation("ApprovedByUser", fields: [approved_by_id], references: [id])
+  driver              Driver    @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@index([approved_by_id], map: "driver_approvals_approved_by_id_fkey")
+  @@map("driver_approvals")
+}
+
+model DriverStatusHistory {
+  id            String   @id @default(uuid())
+  driver_id     String
+  old_status    String?
+  new_status    String
+  changed_by_id String?
+  change_reason String?
+  created_at    DateTime @default(now())
+  changed_by    User?    @relation("StatusChangedByUser", fields: [changed_by_id], references: [id])
+  driver        Driver   @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@index([changed_by_id], map: "driver_status_history_changed_by_id_fkey")
+  @@index([driver_id], map: "driver_status_history_driver_id_fkey")
+  @@map("driver_status_history")
+}
+
+model PricingConfig {
+  id                String   @id @default(uuid())
+  vehicle_type      String   @unique
+  base_fare         Decimal  @default(0.00) @db.Decimal(10, 2)
+  per_km_rate       Decimal  @default(0.00) @db.Decimal(10, 2)
+  weight_multiplier Decimal  @default(0.00) @db.Decimal(10, 2)
+  platform_fee_pct  Decimal  @default(10.00) @db.Decimal(5, 2)
+  fleet_payout_pct  Decimal  @default(70.00) @db.Decimal(5, 2)
+  driver_payout_pct Decimal  @default(20.00) @db.Decimal(5, 2)
+  fuel_surcharge    Decimal  @default(0.00) @db.Decimal(10, 2)
+  tax_rate          Decimal  @default(15.00) @db.Decimal(5, 2)
+  insurance_rate    Decimal  @default(0.00) @db.Decimal(10, 2)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("pricing_configs")
+}
+
+model LiveTrackingTelemetry {
+  id                 String    @id @default(uuid())
+  booking_id         String    @unique
+  driver_id          String
+  latitude           Float
+  longitude          Float
+  completed_distance Float     @default(0)
+  remaining_distance Float
+  eta                DateTime?
+  last_updated       DateTime  @default(now()) @updatedAt
+  booking            Booking   @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@map("live_tracking_telemetry")
+}
+
+model systemsetting {
+  id          String   @id
+  key         String   @unique(map: "SystemSetting_key_key")
+  value       String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime
+}
+
+model LoadOffer {
+  id                    String      @id @default(uuid())
+  booking_id            String
+  driver_id             String?
+  fleet_owner_id        String?
+  status                String      @default("PENDING")
+  rejection_reason      String?
+  estimated_pickup_time DateTime?
+  distance_km           Float?
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
+  booking               Booking     @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  driver                Driver?     @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+  fleet_owner           FleetOwner? @relation(fields: [fleet_owner_id], references: [id], onDelete: Cascade)
+
+  @@index([booking_id])
+  @@index([driver_id])
+  @@map("load_offers")
+}
+
+enum UserRole {
+  ADMIN
+  SUPER_ADMIN
+  CUSTOMER
+  DRIVER
+  FLEET_OWNER
+  PLANT_OWNER
+  BROKER
+  OPERATOR
+}
+
+enum BookingStatus {
+  DRAFT
+  QUOTE_REQUESTED
+  QUOTE_PREPARED
+  CUSTOMER_ACCEPTED
+  ETA_CALCULATION
+  BOOKING_CONFIRMED
+  TRANSPORTER_SEARCHING
+  OFFER_SENT
+  TRANSPORTER_AVAILABLE
+  AVAILABILITY_CONFIRMED
+  TRANSPORTER_ASSIGNMENT
+  DRIVER_SEARCHING
+  DRIVER_OFFER_SENT
+  DRIVER_APPLIED
+  DRIVER_ASSIGNED
+  DRIVER_EN_ROUTE
+  MANUAL_ACTION_REQUIRED
+  ARRIVED_PICKUP
+  PICKUP_SCHEDULED
+  PICKUP_ARRIVED
+  LOADING
+  PICKED_UP
+  IN_TRANSIT
+  ARRIVED_DESTINATION
+  DELIVERED
+  POD_UPLOADED
+  POD_VERIFIED
+  PAYMENT_PENDING
+  PAYMENT_RECEIVED
+  COMPLETED
+  CLOSED
+  CANCELLED
+  REJECTED
+  FAILED
+  EXPIRED
+}
+
+enum QuoteStatus {
+  DRAFT
+  ISSUED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_PAID
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum CommissionType {
+  PLATFORM_FEE
+  BROKER_FEE
+  REFERRAL
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model DriverCompliance {
+  id                String   @id @default(uuid())
+  driver_id         String
+  uniform_standards Boolean  @default(false)
+  hygiene           Boolean  @default(false)
+  documentation     Boolean  @default(false)
+  last_updated      DateTime @default(now())
+
+  driver Driver @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+}
+
+model TripPerformance {
+  id                      String    @id @default(uuid())
+  booking_id              String    @unique
+  driver_id               String
+  dot_status              String?
+  arrive_time             DateTime?
+  collection_time         DateTime?
+  depart_time             DateTime?
+  destination_arrive_time DateTime?
+  weight_of_load          Decimal?  @db.Decimal(10, 2)
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  driver  Driver  @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+}
+
+model SystemSetting {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+enum PayoutStatus {
+  EXPECTED
+  PENDING_PAYOUT
+  PAYOUT_PROCESSING
+  PAID
+  PAYOUT_FAILED
+}
+
+model BookingSettlement {
+  id                         String       @id @default(uuid())
+  booking_id                 String       @unique
+  customerPaymentAmount      Decimal      @default(0.00) @db.Decimal(10, 2)
+  platformFee                Decimal      @default(0.00) @db.Decimal(10, 2)
+  fleetOwnerExpectedEarnings Decimal      @default(0.00) @db.Decimal(10, 2)
+  driverExpectedEarnings     Decimal      @default(0.00) @db.Decimal(10, 2)
+  fleetOwnerPayoutStatus     PayoutStatus @default(EXPECTED)
+  driverPayoutStatus         PayoutStatus @default(EXPECTED)
+  fleetOwnerPayoutReference  String?
+  driverPayoutReference      String?
+  created_at                 DateTime     @default(now())
+  updated_at                 DateTime     @updatedAt
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@map("booking_settlements")
+}
