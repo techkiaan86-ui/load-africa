@@ -17,11 +17,14 @@ const createBooking = async (req, res, next) => {
       delivery_contact, delivery_instructions,
       requested_vehicle, estimated_distance, estimated_duration_mins,
       requirements,
+      requirementTags: reqTags,
       is_urgent,
       loading_assistance,
       unloading_assistance,
       night_pickup,
     } = req.body;
+
+    const requirementTags = Array.isArray(reqTags) ? reqTags : (Array.isArray(requirements) ? requirements : []);
 
     if (!pickup_address || !delivery_address) {
       return res.status(400).json({ success: false, message: 'Pickup and delivery addresses are required.' });
@@ -206,7 +209,7 @@ const createBooking = async (req, res, next) => {
         await tx.bookingRequirement.createMany({
           data: requirementTags.map(tag => ({
             booking_id: booking.id,
-            tag,
+            tag: typeof tag === 'string' ? tag : (tag?.name || tag?.label || String(tag)),
           }))
         });
       }
