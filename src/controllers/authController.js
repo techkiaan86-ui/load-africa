@@ -83,6 +83,34 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+const handlePrismaUniqueError = (error, res) => {
+  if (error.code === 'P2002') {
+    const target = error.meta?.target;
+    let fieldName = 'This detail';
+    if (Array.isArray(target)) {
+      const first = target[0];
+      if (first === 'email') fieldName = 'Email Address';
+      else if (first === 'phone') fieldName = 'Phone Number';
+      else if (first === 'license') fieldName = "Driver's License Number";
+      else if (first === 'national_id' || first === 'id_document') fieldName = 'National ID / Passport Number';
+      else if (first === 'registration_number') fieldName = 'Vehicle Registration Number';
+      else fieldName = first;
+    } else if (typeof target === 'string') {
+      if (target.includes('email')) fieldName = 'Email Address';
+      else if (target.includes('phone')) fieldName = 'Phone Number';
+      else if (target.includes('license')) fieldName = "Driver's License Number";
+      else if (target.includes('national_id') || target.includes('id_document')) fieldName = 'National ID / Passport Number';
+      else if (target.includes('registration_number')) fieldName = 'Vehicle Registration Number';
+      else fieldName = target;
+    }
+    return res.status(400).json({
+      success: false,
+      message: `${fieldName} is already registered with another account. Please use a different value.`
+    });
+  }
+  return null;
+};
+
 const register = async (req, res, next) => {
   try {
     const validatedData = registerSchema.parse(req.body);
@@ -97,6 +125,8 @@ const register = async (req, res, next) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'Validation Error', errors: error.errors });
     }
+    const prismaHandled = handlePrismaUniqueError(error, res);
+    if (prismaHandled) return;
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -127,10 +157,8 @@ const registerDriverController = async (req, res, next) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'Validation Error', errors: error.errors });
     }
-    if (error.code === 'P2002') {
-      const field = error.meta?.target?.[0] || 'A unique field';
-      return res.status(400).json({ success: false, message: `${field} is already registered. Please use a unique value.` });
-    }
+    const prismaHandled = handlePrismaUniqueError(error, res);
+    if (prismaHandled) return;
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -154,15 +182,42 @@ const login = async (req, res, next) => {
 };
 
 const getMe = async (req, res, next) => {
-  res.status(200).json({
-    success: true,
-    data: {
-      id: req.user.id,
-      email: req.user.email,
-      role: req.user.role,
-      status: req.user.status,
-    }
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        customer: true,
+        driver: true,
+        fleet_owner: true,
+        broker: true,
+        plant_owner: true
+      }
+    });
+
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        avatar: user.avatar,
+        role: user.role,
+        status: user.status,
+        company_name: user.customer?.company_name || user.fleet_owner?.company_name || user.broker?.company_name || user.plant_owner?.company_name,
+        customer: user.customer,
+        driver: user.driver,
+        fleet_owner: user.fleet_owner,
+        broker: user.broker,
+        plant_owner: user.plant_owner
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
 };
 
 const getApprovedFleetOwnersPublic = async (req, res) => {
@@ -183,17 +238,43 @@ const getApprovedFleetOwnersPublic = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { first_name, last_name, phone, avatar } = req.body;
+    const { first_name, last_name, phone, avatar, company_name } = req.body;
     const userId = req.user.id;
     
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        first_name: first_name !== undefined ? first_name : undefined,
-        last_name: last_name !== undefined ? last_name : undefined,
-        phone: phone !== undefined ? phone : undefined,
-        avatar: avatar !== undefined ? avatar : undefined,
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id: userId },
+        data: {
+          first_name: first_name !== undefined ? first_name : undefined,
+          last_name: last_name !== undefined ? last_name : undefined,
+          phone: phone !== undefined ? phone : undefined,
+          avatar: avatar !== undefined ? avatar : undefined,
+        },
+        include: {
+          customer: true,
+          driver: true,
+          fleet_owner: true,
+          broker: true,
+          plant_owner: true
+        }
+      });
+
+      if (company_name !== undefined) {
+        if (u.customer?.id) {
+          await tx.customer.update({
+            where: { id: u.customer.id },
+            data: { company_name }
+          });
+        }
+        if (u.fleet_owner?.id) {
+          await tx.fleetOwner.update({
+            where: { id: u.fleet_owner.id },
+            data: { company_name }
+          });
+        }
       }
+
+      return u;
     });
 
     res.status(200).json({ 
@@ -206,7 +287,8 @@ const updateProfile = async (req, res) => {
         phone: updatedUser.phone,
         avatar: updatedUser.avatar,
         email: updatedUser.email,
-        role: updatedUser.role
+        role: updatedUser.role,
+        company_name: company_name || updatedUser.customer?.company_name
       }
     });
   } catch (error) {

@@ -20,15 +20,31 @@ const getCustomerDashboard = async (userId) => {
   const activeBookingsCount = await prisma.booking.count({
     where: {
       customer_id: customer.id,
-      status: { in: ['DRIVER_ASSIGNED', 'PICKUP_SCHEDULED', 'PICKUP_ARRIVED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'] }
+      status: { in: ['DRIVER_ASSIGNED', 'PICKUP_SCHEDULED', 'PICKUP_ARRIVED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'TRANSPORTER_SEARCHING', 'OFFER_SENT', 'AVAILABILITY_CONFIRMED', 'PAYMENT_PENDING'] }
     }
   });
 
-  // Count bookings where broker has prepared a quote — customer needs to act
+  // Count bookings where broker has prepared a quote or awaiting decision
   const pendingQuotesCount = await prisma.booking.count({
     where: {
       customer_id: customer.id,
-      status: 'QUOTE_PREPARED',
+      status: { in: ['QUOTE_REQUESTED', 'QUOTE_PREPARED'] }
+    }
+  });
+
+  // Completed bookings count
+  const completedBookingsCount = await prisma.booking.count({
+    where: {
+      customer_id: customer.id,
+      status: { in: ['COMPLETED', 'CLOSED', 'DELIVERED', 'POD_VERIFIED'] }
+    }
+  });
+
+  // Rejected / Cancelled count
+  const rejectedBookingsCount = await prisma.booking.count({
+    where: {
+      customer_id: customer.id,
+      status: { in: ['REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED'] }
     }
   });
 
@@ -57,6 +73,8 @@ const getCustomerDashboard = async (userId) => {
   return {
     activeBookingsCount,
     pendingQuotesCount,
+    completedBookingsCount,
+    rejectedBookingsCount,
     totalBookings,
     walletBalance,
     recentBookings
@@ -83,6 +101,11 @@ const getMyQuotations = async (userId) => {
       customer_id: customer.id,
       status: { in: ['QUOTE_REQUESTED', 'QUOTE_PREPARED', 'CUSTOMER_ACCEPTED', 'BOOKING_CONFIRMED', 'REJECTED'] },
       is_deleted: false,
+      requirements: {
+        none: {
+          tag: 'QUOTE_DISMISSED',
+        },
+      },
     },
     orderBy: { updated_at: 'desc' },
     include: {
@@ -97,5 +120,38 @@ const getMyQuotations = async (userId) => {
   return quotations;
 };
 
-module.exports = { getCustomerDashboard, getMyQuotations };
+const dismissQuotation = async (userId, bookingId) => {
+  const customer = await prisma.customer.findUnique({
+    where: { user_id: userId },
+  });
+
+  if (!customer) {
+    throw new Error('Customer profile not found');
+  }
+
+  // Ensure booking belongs to this customer
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      customer_id: customer.id,
+    },
+  });
+
+  if (!booking) {
+    throw new Error('Booking not found');
+  }
+
+  // Create tag QUOTE_DISMISSED so it is hidden only from My Quotations without affecting Booking History
+  await prisma.bookingRequirement.create({
+    data: {
+      booking_id: bookingId,
+      tag: 'QUOTE_DISMISSED',
+      value: 'true',
+    },
+  }).catch(() => {});
+
+  return { success: true };
+};
+
+module.exports = { getCustomerDashboard, getMyQuotations, dismissQuotation };
 

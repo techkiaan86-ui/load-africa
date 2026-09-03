@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDashboard, getMyQuotations } = require('../controllers/customerController');
+const { getDashboard, getMyQuotations, dismissQuotation } = require('../controllers/customerController');
 const { requireAuth, requireRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -10,5 +10,6 @@ router.use(requireRole(['CUSTOMER']));
 
 router.get('/dashboard', getDashboard);
 router.get('/my-quotations', getMyQuotations);
+router.delete('/my-quotations/:id', dismissQuotation);
 
 module.exports = router;

@@ -1030,10 +1030,22 @@ const assignDriverFleet = async (req, res) => {
 
     const driver = user.driver;
 
+    let targetFleetOwnerId = fleetOwnerId || null;
+    if (fleetOwnerId) {
+      const directFleet = await prisma.fleetOwner.findUnique({ where: { id: fleetOwnerId } });
+      if (!directFleet) {
+        // Check if passed ID was a user_id
+        const userFleet = await prisma.fleetOwner.findFirst({ where: { user_id: fleetOwnerId } });
+        if (userFleet) {
+          targetFleetOwnerId = userFleet.id;
+        }
+      }
+    }
+
     await prisma.driver.update({
       where: { id: driver.id },
       data: {
-        fleet_owner_id: fleetOwnerId || null
+        fleet_owner_id: targetFleetOwnerId
       }
     });
 
@@ -1041,7 +1053,7 @@ const assignDriverFleet = async (req, res) => {
       data: {
         user_id: req.user.id,
         action: 'DRIVER_FLEET_ASSIGNED',
-        description: `Admin assigned driver ${user.email} to fleet owner ${fleetOwnerId}`
+        description: `Admin assigned driver ${user.email} to fleet owner ${targetFleetOwnerId}`
       }
     });
 
@@ -1053,9 +1065,9 @@ const assignDriverFleet = async (req, res) => {
 
 const getApprovedFleetOwners = async (req, res) => {
   try {
-    const fleetOwners = await prisma.user.findMany({
-      where: { role: 'FLEET_OWNER', status: 'ACTIVE', is_deleted: false },
-      include: { fleet_owner: true }
+    const fleetOwners = await prisma.fleetOwner.findMany({
+      where: { user: { status: 'ACTIVE', is_deleted: false } },
+      include: { user: true }
     });
     res.status(200).json({ success: true, data: fleetOwners });
   } catch (error) {

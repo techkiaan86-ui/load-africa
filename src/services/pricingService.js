@@ -14,6 +14,45 @@ const DEFAULT_VEHICLE_RATES = {
   'Refrigerated': { base_price_per_km: 25, capacity: 15000, speed_kmh: 65, badges: ['Premium'] },
 };
 
+/**
+ * Reads real-time admin pricing rates from database
+ */
+const getDynamicPricingConfig = async () => {
+  const config = {
+    RATE_LIGHT_DUTY: 12.00,
+    RATE_MEDIUM_DUTY: 18.00,
+    RATE_HEAVY_DUTY: 30.00,
+    RATE_REFRIGERATED: 25.00,
+    RATE_WEIGHT_PER_TON: 1.50,
+    RATE_FUEL_SURCHARGE_PCT: 10.00,
+    RATE_TOLL_PER_100KM: 50.00,
+    RATE_VAT_PCT: 15.00,
+    PLATFORM_FEE_PCT: 10.00,
+    FLEET_PAYOUT_PCT: 70.00,
+    DRIVER_PAYOUT_PCT: 20.00
+  };
+
+  try {
+    const settings = await prisma.systemSetting.findMany();
+    settings.forEach(s => {
+      const num = parseFloat(s.value);
+      if (!isNaN(num)) config[s.key] = num;
+    });
+
+    const pConfig = await prisma.pricingConfig.findFirst();
+    if (pConfig) {
+      if (pConfig.platform_fee_pct) config.PLATFORM_FEE_PCT = Number(pConfig.platform_fee_pct);
+      if (pConfig.fleet_payout_pct) config.FLEET_PAYOUT_PCT = Number(pConfig.fleet_payout_pct);
+      if (pConfig.driver_payout_pct) config.DRIVER_PAYOUT_PCT = Number(pConfig.driver_payout_pct);
+      if (pConfig.tax_rate) config.RATE_VAT_PCT = Number(pConfig.tax_rate);
+    }
+  } catch (e) {
+    console.warn('Could not read dynamic pricing from db, using defaults');
+  }
+
+  return config;
+};
+
 const resolveVehicleCategory = (vehicleType, weightKg, customRates = {}) => {
   const rates = { ...DEFAULT_VEHICLE_RATES, ...customRates };
   if (rates[vehicleType]) return { ...rates[vehicleType], typeKey: vehicleType };
@@ -123,5 +162,6 @@ const recommendVehicles = (distanceKm, weightKg, requirements = [], ratesConfig 
 
 module.exports = {
   calculateDetailedQuote,
-  recommendVehicles
+  recommendVehicles,
+  getDynamicPricingConfig
 };

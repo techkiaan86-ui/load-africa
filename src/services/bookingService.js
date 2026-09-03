@@ -81,64 +81,34 @@ const createBooking = async (req, res, next) => {
 
     const validDistanceKm = distanceKm && distanceKm > 0 ? distanceKm : 15;
 
-    // Fetch dynamic admin pricing rate configurations from system_settings and VehicleCategory DB table
-    let ratesConfig = {};
-    let validWeight = 1.0;
-    try {
-      const dbSettings = await prisma.systemSetting.findMany({
-        where: {
-          key: {
-            in: [
-              'RATE_LIGHT_DUTY', 'RATE_MEDIUM_DUTY', 'RATE_HEAVY_DUTY', 'RATE_REFRIGERATED',
-              'RATE_WEIGHT_PER_TON', 'RATE_FUEL_SURCHARGE_PCT', 'RATE_TOLL_PER_100KM', 'RATE_VAT_PCT'
-            ]
-          }
-        }
-      });
-      const sMap = {};
-      dbSettings.forEach(s => { sMap[s.key] = parseFloat(s.value); });
-      
-      const reqVeh = requested_vehicle || 'Medium Duty';
-      let perKm = null;
-      let internalCapacityTons = 1.0;
+    const { getDynamicPricingConfig } = require('./pricingService');
+    const dynamicConfig = await getDynamicPricingConfig();
 
-      // Primary source of truth: Admin-configured VehicleCategory DB record
-      if (reqVeh) {
-        const cat = await prisma.vehicleCategory.findFirst({
-          where: {
-            OR: [
-              { name: reqVeh },
-              { id: reqVeh }
-            ],
-            is_deleted: false
-          }
-        });
-        if (cat) {
-          perKm = Number(cat.base_price_per_km);
-          internalCapacityTons = cat.capacity_tons || 1.0;
-        }
-      }
+    const reqVeh = requested_vehicle || 'Medium Duty';
+    let perKm = dynamicConfig.RATE_MEDIUM_DUTY || 18.0;
+    let internalCapacityTons = 5.0;
 
-      // Fallback matching if VehicleCategory was not found by exact string
-      if (!perKm || isNaN(perKm)) {
-        perKm = sMap.RATE_MEDIUM_DUTY || 18;
-        if (reqVeh.includes('Light') || reqVeh.includes('Bakkie') || reqVeh.includes('Motorbike')) perKm = sMap.RATE_LIGHT_DUTY || 12;
-        else if (reqVeh.includes('Heavy') || reqVeh.includes('Tipper') || reqVeh.includes('Flatbed')) perKm = sMap.RATE_HEAVY_DUTY || 30;
-        else if (reqVeh.includes('Refrigerated') || reqVeh.includes('Coldroom')) perKm = sMap.RATE_REFRIGERATED || 25;
-      }
-
-      validWeight = weight ? parseFloat(weight) : internalCapacityTons;
-
-      ratesConfig = {
-        perKmRate: perKm,
-        weightRate: 0,
-        fuelPct: sMap.RATE_FUEL_SURCHARGE_PCT ?? 10,
-        tollRate: sMap.RATE_TOLL_PER_100KM ?? 50,
-        vatPct: sMap.RATE_VAT_PCT ?? 15
-      };
-    } catch (e) {
-      validWeight = weight ? parseFloat(weight) : 1.0;
+    if (reqVeh.includes('Light') || reqVeh.includes('Bakkie') || reqVeh.includes('Motorbike') || reqVeh.includes('1-3')) {
+      perKm = dynamicConfig.RATE_LIGHT_DUTY || 12.0;
+      internalCapacityTons = 2.0;
+    } else if (reqVeh.includes('Heavy') || reqVeh.includes('Tipper') || reqVeh.includes('Flatbed') || reqVeh.includes('14') || reqVeh.includes('34')) {
+      perKm = dynamicConfig.RATE_HEAVY_DUTY || 30.0;
+      internalCapacityTons = 34.0;
+    } else if (reqVeh.includes('Refrigerated') || reqVeh.includes('Coldroom')) {
+      perKm = dynamicConfig.RATE_REFRIGERATED || 25.0;
+      internalCapacityTons = 15.0;
     }
+
+    validWeight = weight ? parseFloat(weight) : internalCapacityTons;
+
+    ratesConfig = {
+      perKmRate: perKm,
+      weightRate: dynamicConfig.RATE_WEIGHT_PER_TON || 1.5,
+      fuelPct: dynamicConfig.RATE_FUEL_SURCHARGE_PCT || 10,
+      tollRate: dynamicConfig.RATE_TOLL_PER_100KM || 50,
+      platformFeePct: dynamicConfig.PLATFORM_FEE_PCT || 10,
+      vatPct: dynamicConfig.RATE_VAT_PCT || 15
+    };
 
     // Automatically calculate quote using authoritative pricing engine
     const quoteCalculation = calculateDetailedQuote(

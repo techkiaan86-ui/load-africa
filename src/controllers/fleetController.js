@@ -347,8 +347,10 @@ const getDrivers = async (req, res) => {
       where: { fleet_owner_id: fleetOwner.id, is_deleted: false },
       include: {
         user: true,
-        assigned_vehicle: true
-      }
+        assigned_vehicle: true,
+        documents_relation: true
+      },
+      orderBy: { created_at: 'desc' }
     });
     res.status(200).json({ success: true, data: drivers });
   } catch (error) {
@@ -545,7 +547,7 @@ const updateDriverStatus = async (req, res) => {
       });
 
       let driverStatus = driver.status;
-      if (status === 'ACTIVE' && driver.status === 'INACTIVE') {
+      if (status === 'ACTIVE' && (driver.status === 'INACTIVE' || driver.status === 'PENDING' || !driver.status)) {
         driverStatus = 'AVAILABLE';
       } else if (status === 'SUSPENDED') {
         driverStatus = 'INACTIVE';
@@ -561,7 +563,7 @@ const updateDriverStatus = async (req, res) => {
       return updatedUser;
     });
 
-    res.status(200).json({ success: true, data: result });
+    res.status(200).json({ success: true, message: 'Driver status updated successfully', data: result });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

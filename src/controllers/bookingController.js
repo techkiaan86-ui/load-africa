@@ -387,10 +387,26 @@ const getBookingTimeline = async (req, res, next) => {
   try {
     const { id } = req.params;
     const history = await prisma.trackingHistory.findMany({
-      where: { booking_id: id },
+      where: { 
+        booking_id: id,
+        NOT: {
+          remarks: { contains: 'Live telemetry update' }
+        }
+      },
       orderBy: { timestamp: 'asc' }
     });
-    res.status(200).json({ success: true, data: history });
+
+    // Filter consecutive duplicate status logs
+    const cleaned = [];
+    let lastStatus = null;
+    for (const h of history) {
+      if (h.status !== lastStatus || (h.remarks && !h.remarks.includes('Live telemetry update'))) {
+        cleaned.push(h);
+        lastStatus = h.status;
+      }
+    }
+
+    res.status(200).json({ success: true, data: cleaned });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
