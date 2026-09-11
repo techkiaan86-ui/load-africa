@@ -311,7 +311,7 @@ const loginUser = async (email, password) => {
   }
 
   // Auto-activate CUSTOMER users (customers do not require KYC vetting)
-  if (user.status === 'PENDING' && user.role === 'CUSTOMER') {
+  if (user.status !== 'ACTIVE' && user.role === 'CUSTOMER') {
     user = await prisma.user.update({
       where: { id: user.id },
       data: { status: 'ACTIVE' }
