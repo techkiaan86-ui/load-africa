@@ -14,7 +14,9 @@ const registerUser = async (data) => {
 
   // Prisma Transaction for User + Profile Creation + Wallet
   const result = await prisma.$transaction(async (tx) => {
-    const status = ['CUSTOMER', 'DRIVER', 'FLEET_OWNER', 'PLANT_OWNER', 'BROKER'].includes(role) ? 'PENDING' : 'ACTIVE';
+    // Customers are ACTIVE immediately so they can login and book cargo right away
+    // Service providers (DRIVER, FLEET_OWNER, PLANT_OWNER, BROKER) require admin vetting (PENDING)
+    const status = ['DRIVER', 'FLEET_OWNER', 'PLANT_OWNER', 'BROKER'].includes(role) ? 'PENDING' : 'ACTIVE';
 
     const user = await tx.user.create({
       data: {
@@ -294,9 +296,17 @@ const loginUser = async (email, password) => {
     });
   }
 
-  // Handle custom approval workflow status checks
+  // Auto-activate CUSTOMER users (customers do not require KYC vetting)
+  if (user.status === 'PENDING' && user.role === 'CUSTOMER') {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'ACTIVE' }
+    });
+  }
+
+  // Handle custom approval workflow status checks for drivers, fleet owners, etc.
   if (user.status === 'PENDING') {
-    throw new Error('Your account is under review.');
+    throw new Error('Your account is under review by administration.');
   }
 
   if (user.status === 'REJECTED') {

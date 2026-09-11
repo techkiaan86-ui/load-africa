@@ -1485,6 +1485,82 @@ const deleteVehicleCategory = async (req, res) => {
   }
 };
 
+const cleanupLiveDatabase = async (req, res) => {
+  try {
+    try {
+      await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
+    } catch (e) {}
+
+    // 1. Transactional & Booking tables
+    try { await prisma.bookingSettlement.deleteMany({}); } catch (e) {}
+    try { await prisma.tripPerformance.deleteMany({}); } catch (e) {}
+    try { await prisma.loadOffer.deleteMany({}); } catch (e) {}
+    try { await prisma.liveTrackingTelemetry.deleteMany({}); } catch (e) {}
+    try { await prisma.trackingHistory.deleteMany({}); } catch (e) {}
+    try { await prisma.payment.deleteMany({}); } catch (e) {}
+    try { await prisma.invoice.deleteMany({}); } catch (e) {}
+    try { await prisma.quote.deleteMany({}); } catch (e) {}
+    try { await prisma.bookingDocument.deleteMany({}); } catch (e) {}
+    try { await prisma.bookingRequirement.deleteMany({}); } catch (e) {}
+    try { await prisma.bookingAssignment.deleteMany({}); } catch (e) {}
+    try { await prisma.booking.deleteMany({}); } catch (e) {}
+
+    // 2. Hire requests & Plant equipment
+    try { await prisma.hireRequest.deleteMany({}); } catch (e) {}
+    try { await prisma.machineOperator.deleteMany({}); } catch (e) {}
+    try { await prisma.machine.deleteMany({}); } catch (e) {}
+
+    // 3. Driver & Application details
+    try { await prisma.driverApplication.deleteMany({}); } catch (e) {}
+    try { await prisma.plantOwnerApplication.deleteMany({}); } catch (e) {}
+    try { await prisma.driverStatusHistory.deleteMany({}); } catch (e) {}
+    try { await prisma.driverApproval.deleteMany({}); } catch (e) {}
+    try { await prisma.driverCompliance.deleteMany({}); } catch (e) {}
+    try { await prisma.driverKYC.deleteMany({}); } catch (e) {}
+    try { await prisma.driverVehicle.deleteMany({}); } catch (e) {}
+    try { await prisma.driverDocuments.deleteMany({}); } catch (e) {}
+    try { await prisma.driverPhoto.deleteMany({}); } catch (e) {}
+    try { await prisma.driverProfile.deleteMany({}); } catch (e) {}
+
+    // 4. Vehicles & Wallets
+    try { await prisma.vehicle.deleteMany({}); } catch (e) {}
+    try { await prisma.walletTransaction.deleteMany({}); } catch (e) {}
+    try { await prisma.wallet.deleteMany({}); } catch (e) {}
+    try { await prisma.commission.deleteMany({}); } catch (e) {}
+
+    // 5. Activity logs & Notifications
+    try { await prisma.activityLog.deleteMany({}); } catch (e) {}
+    try { await prisma.auditLog.deleteMany({}); } catch (e) {}
+    try { await prisma.notification.deleteMany({}); } catch (e) {}
+
+    // 6. Delete all demo customer, driver, fleet, plant, and broker role records
+    try { await prisma.driver.deleteMany({}); } catch (e) {}
+    try { await prisma.fleetOwner.deleteMany({}); } catch (e) {}
+    try { await prisma.plantOwner.deleteMany({}); } catch (e) {}
+    try { await prisma.broker.deleteMany({}); } catch (e) {}
+    try { await prisma.customer.deleteMany({}); } catch (e) {}
+
+    // 7. Delete non-admin test users
+    try {
+      await prisma.user.deleteMany({
+        where: {
+          role: {
+            notIn: ['ADMIN', 'SUPER_ADMIN']
+          }
+        }
+      });
+    } catch (e) {}
+
+    try {
+      await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
+    } catch (e) {}
+
+    res.status(200).json({ success: true, message: 'All dummy platform data and test users successfully deleted from database.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getActiveTripsData,
   getTransporterMatchingData,
@@ -1520,6 +1596,6 @@ module.exports = {
   createVehicleCategory,
   updateVehicleCategory,
   toggleVehicleCategoryStatus,
-  deleteVehicleCategory
+  deleteVehicleCategory,
+  cleanupLiveDatabase
 };
-

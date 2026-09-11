@@ -34,7 +34,8 @@ const {
   createVehicleCategory,
   updateVehicleCategory,
   toggleVehicleCategoryStatus,
-  deleteVehicleCategory
+  deleteVehicleCategory,
+  cleanupLiveDatabase
 } = require('../controllers/adminController');
 const { requireAuth, requireRole } = require('../middlewares/authMiddleware');
 
@@ -95,5 +96,8 @@ router.get('/payments', getAdminFinancials);
 router.post('/brokers/create', createBroker);
 
 router.get('/audit-logs', getAuditLogs);
+
+// Wipe / Cleanup All Dummy Data from Live Database
+router.post('/cleanup-database', cleanupLiveDatabase);
 
 module.exports = router;
