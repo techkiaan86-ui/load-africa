@@ -102,7 +102,21 @@ const registerUser = async (data) => {
     return user;
   });
 
-  return { id: result.id, email: result.email, role: result.role };
+  const token = generateToken(result.id, result.role);
+
+  return {
+    token,
+    user: {
+      id: result.id,
+      email: result.email,
+      role: result.role,
+      status: result.status,
+      first_name: result.first_name,
+      last_name: result.last_name,
+      phone: result.phone,
+      created_at: result.created_at
+    }
+  };
 };
 
 const registerDriver = async (data) => {
