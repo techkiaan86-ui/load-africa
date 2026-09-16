@@ -2,6 +2,7 @@ const express = require('express');
 const { 
   approveDriverKYC, 
   approveFleetOwner, 
+  approveBroker,
   approveVehicle, 
   approvePlantOwner, 
   approveMachine,
@@ -82,6 +83,7 @@ router.delete('/bookings/:id', deleteBooking);
 // Legacy/Specific Entity Approvals
 router.post('/kyc/approve/:driverId', approveDriverKYC);
 router.post('/fleet/approve/:fleetId', approveFleetOwner);
+router.post('/broker/approve/:brokerId', approveBroker);
 router.post('/vehicle/approve/:vehicleId', approveVehicle);
 router.post('/plant/approve/:plantId', approvePlantOwner);
 router.post('/machine/approve/:machineId', approveMachine);

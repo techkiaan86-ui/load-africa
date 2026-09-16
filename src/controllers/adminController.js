@@ -32,6 +32,45 @@ const approveFleetOwner = async (req, res) => {
   }
 };
 
+const approveBroker = async (req, res) => {
+  try {
+    const { brokerId } = req.params;
+    let broker = await prisma.broker.findUnique({
+      where: { id: brokerId }
+    });
+    if (!broker) {
+      broker = await prisma.broker.findUnique({
+        where: { user_id: brokerId }
+      });
+    }
+    if (!broker) {
+      return res.status(404).json({ success: false, message: 'Broker not found' });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: broker.user_id },
+        data: { status: 'ACTIVE' }
+      }),
+      prisma.broker.update({
+        where: { id: broker.id },
+        data: { status: 'ACTIVE' }
+      }),
+      prisma.activityLog.create({
+        data: {
+          user_id: req.user.id,
+          action: 'BROKER_APPROVED',
+          description: `Admin approved broker ${broker.id}`
+        }
+      })
+    ]);
+
+    res.status(200).json({ success: true, message: 'Broker approved successfully' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const approveVehicle = async (req, res) => {
   try {
     const { vehicleId } = req.params;
@@ -122,6 +161,8 @@ const approveUser = async (req, res) => {
             status: 'ACTIVE'
           }
         });
+      } else if (user.role === 'BROKER') {
+        await tx.broker.update({ where: { user_id: userId }, data: { status: 'ACTIVE' }});
       }
 
       await tx.activityLog.create({
@@ -158,6 +199,8 @@ const rejectUser = async (req, res) => {
         await tx.fleetOwner.update({ where: { user_id: userId }, data: { status: 'REJECTED' }});
       } else if (user.role === 'PLANT_OWNER') {
         await tx.plantOwner.update({ where: { user_id: userId }, data: { status: 'REJECTED' }});
+      } else if (user.role === 'BROKER') {
+        await tx.broker.update({ where: { user_id: userId }, data: { status: 'REJECTED' }});
       }
 
       await tx.activityLog.create({
@@ -1254,6 +1297,12 @@ const getComplianceData = async (req, res) => {
         user: { select: { id: true, first_name: true, last_name: true, email: true, phone: true, status: true } }
       }
     });
+
+    const brokers = await prisma.broker.findMany({
+      include: {
+        user: { select: { id: true, first_name: true, last_name: true, email: true, phone: true, status: true } }
+      }
+    });
     
     let totalUniform = 0;
     let totalHygiene = 0;
@@ -1279,6 +1328,7 @@ const getComplianceData = async (req, res) => {
         drivers,
         fleets,
         plants,
+        brokers,
         uniformCompliancePct, 
         hygieneCompliancePct, 
         docCompliancePct 
@@ -1568,6 +1618,7 @@ module.exports = {
   getComplianceData,
   approveDriverKYC,
   approveFleetOwner,
+  approveBroker,
   approveVehicle,
   approvePlantOwner,
   approveMachine,

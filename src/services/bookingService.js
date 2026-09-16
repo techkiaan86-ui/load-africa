@@ -101,24 +101,68 @@ const createBooking = async (req, res, next) => {
 
     validWeight = weight ? parseFloat(weight) : internalCapacityTons;
 
-    ratesConfig = {
-      perKmRate: perKm,
-      weightRate: dynamicConfig.RATE_WEIGHT_PER_TON || 1.5,
-      fuelPct: dynamicConfig.RATE_FUEL_SURCHARGE_PCT || 10,
-      tollRate: dynamicConfig.RATE_TOLL_PER_100KM || 50,
-      platformFeePct: dynamicConfig.PLATFORM_FEE_PCT || 10,
-      vatPct: dynamicConfig.RATE_VAT_PCT || 15
-    };
+    // Check if this is a Plant Hire booking
+    const isPlantHire = cargo_category === 'Plant Hire';
+    let breakdown;
 
-    // Automatically calculate quote using authoritative pricing engine
-    const quoteCalculation = calculateDetailedQuote(
-      validDistanceKm,
-      validWeight,
-      requested_vehicle || 'Medium Duty',
-      requirementTags,
-      ratesConfig
-    );
-    const breakdown = quoteCalculation.breakdown;
+    if (isPlantHire) {
+      const PLANT_RATES = {
+        'Excavator': 850,
+        'TLB': 550,
+        'Grader': 950,
+        'Bulldozer': 1100,
+        'Crane': 1800,
+        'Forklift': 450,
+        'Telehandler': 650,
+        'Roller': 500,
+        'Compactor': 450,
+        'Concrete Mixer': 700,
+        'Concrete Pump': 900,
+        'Drill Rig': 1200,
+        'Auger': 750
+      };
+
+      let plantHours = 8;
+      try {
+        if (description && description.startsWith('{')) {
+          const parsed = JSON.parse(description);
+          if (parsed.durationValue) plantHours = parseFloat(parsed.durationValue) || 8;
+        }
+      } catch (e) {
+        plantHours = 8;
+      }
+
+      const hourlyRate = PLANT_RATES[requested_vehicle] || 750;
+      const basePlantFare = parseFloat((plantHours * hourlyRate).toFixed(2));
+      const mobilizationFee = 1200.00; // Flat equipment mobilization & delivery fee
+      const subtotal = basePlantFare + mobilizationFee;
+      const platformFee = parseFloat((subtotal * 0.10).toFixed(2));
+      const tax = parseFloat(((subtotal + platformFee) * 0.15).toFixed(2));
+      const grandTotal = parseFloat((subtotal + platformFee + tax).toFixed(2));
+
+      breakdown = {
+        distance_km: validDistanceKm,
+        base_fare: basePlantFare,
+        weight_charges: mobilizationFee,
+        fuel_surcharge: 0,
+        toll_charges: 0,
+        insurance: 0,
+        platform_fee: platformFee,
+        tax: tax,
+        discount: 0,
+        grand_total: grandTotal
+      };
+    } else {
+      // Automatically calculate quote using authoritative pricing engine
+      const quoteCalculation = calculateDetailedQuote(
+        validDistanceKm,
+        validWeight,
+        requested_vehicle || 'Medium Duty',
+        requirementTags,
+        ratesConfig
+      );
+      breakdown = quoteCalculation.breakdown;
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create the booking record with status QUOTE_PREPARED

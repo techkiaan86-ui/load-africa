@@ -3,7 +3,9 @@ const { prisma } = require('../config/db');
 const { generateToken } = require('../utils/jwt');
 
 const registerUser = async (data) => {
-  const { email, password, role, firstName, lastName, phone, companyName, vatNumber, numVehicles, fleetTier, operatingAreas, servicesOffered, notes, address, location_lat, location_lng, license, pdp, idDocument, vehicleType, vehicleReg, licenseFront, pdpDoc, vehicleDoc } = data;
+  let { email, password, role, firstName, lastName, phone, companyName, vatNumber, numVehicles, fleetTier, operatingAreas, servicesOffered, notes, address, location_lat, location_lng, license, pdp, idDocument, vehicleType, vehicleReg, licenseFront, pdpDoc, vehicleDoc, companyDocuments } = data;
+
+  email = (email || '').trim().toLowerCase();
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
@@ -24,9 +26,9 @@ const registerUser = async (data) => {
         password: hashedPassword,
         role,
         status,
-        first_name: firstName,
-        last_name: lastName,
-        phone
+        first_name: firstName?.trim() || null,
+        last_name: lastName?.trim() || null,
+        phone: phone?.trim() || null
       },
     });
 
@@ -66,23 +68,37 @@ const registerUser = async (data) => {
       await tx.fleetOwner.create({
         data: {
           user_id: user.id,
-          company_name: companyName,
-          vat_number: vatNumber,
-          num_vehicles: numVehicles,
-          fleet_tier: fleetTier,
-          operating_areas: operatingAreas,
-          services_offered: servicesOffered,
-          notes: notes,
-          address: address,
-          location_lat: location_lat,
-          location_lng: location_lng,
+          company_name: companyName || '',
+          vat_number: vatNumber || null,
+          num_vehicles: numVehicles ? parseInt(numVehicles, 10) : 1,
+          fleet_tier: fleetTier || null,
+          operating_areas: operatingAreas || null,
+          services_offered: servicesOffered || null,
+          notes: notes || null,
+          address: address || null,
+          location_lat: location_lat ? parseFloat(location_lat) : null,
+          location_lng: location_lng ? parseFloat(location_lng) : null,
           status: 'PENDING_APPROVAL'
         }
       });
     } else if (role === 'PLANT_OWNER') {
       await tx.plantOwner.create({ data: { user_id: user.id, company_name: companyName } });
     } else if (role === 'BROKER') {
-      await tx.broker.create({ data: { user_id: user.id, company_name: companyName } });
+      await tx.broker.create({
+        data: {
+          user_id: user.id,
+          company_name: companyName || '',
+          vat_number: vatNumber || null,
+          address: address || null,
+          location_lat: location_lat ? parseFloat(location_lat) : null,
+          location_lng: location_lng ? parseFloat(location_lng) : null,
+          operating_areas: operatingAreas || null,
+          services_offered: servicesOffered || null,
+          notes: notes || null,
+          company_documents: companyDocuments ? (typeof companyDocuments === 'object' ? JSON.stringify(companyDocuments) : companyDocuments) : null,
+          status: 'PENDING_APPROVAL'
+        }
+      });
     } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
       await tx.admin.create({ data: { user_id: user.id } });
     }

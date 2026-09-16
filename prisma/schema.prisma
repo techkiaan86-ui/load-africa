@@ -152,16 +152,25 @@ model PlantOwner {
 }
 
 model Broker {
-  id           String              @id @default(uuid())
-  user_id      String              @unique
-  company_name String?
-  created_at   DateTime            @default(now())
-  updated_at   DateTime            @updatedAt
-  deleted_at   DateTime?
-  deleted_by   String?
-  is_deleted   Boolean             @default(false)
-  assignments  BookingAssignment[]
-  user         User                @relation(fields: [user_id], references: [id])
+  id                String              @id @default(uuid())
+  user_id           String              @unique
+  company_name      String?
+  vat_number        String?
+  address           String?
+  location_lat      Float?
+  location_lng      Float?
+  operating_areas   String?
+  services_offered  String?
+  notes             String?
+  company_documents String?             @db.LongText
+  status            String              @default("REGISTERED")
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+  deleted_at        DateTime?
+  deleted_by        String?
+  is_deleted        Boolean             @default(false)
+  assignments       BookingAssignment[]
+  user              User                @relation(fields: [user_id], references: [id])
 
   @@map("brokers")
 }

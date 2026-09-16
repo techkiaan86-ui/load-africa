@@ -13,7 +13,8 @@ const {
   assignFleet,
   getApprovedFleetOwners,
   getApprovedPlantOwners,
-  assignPlant
+  assignPlant,
+  submitCompliance
 } = require('../controllers/brokerController');
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.use(requireAuth);
 router.use(requireRole('BROKER'));
 
 router.get('/dashboard', getDashboardStats);
+router.post('/compliance/submit', submitCompliance);
 router.get('/quotes/requests', getQuoteRequests);
 
 router.get('/quotes', getQuotations);

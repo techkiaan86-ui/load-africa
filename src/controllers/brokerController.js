@@ -507,6 +507,28 @@ const getPlantHireRequests = async (req, res) => {
   }
 };
 
+const submitCompliance = async (req, res) => {
+  try {
+    const broker = await prisma.broker.findUnique({ where: { user_id: req.user.id } });
+    if (!broker) return res.status(404).json({ success: false, message: 'Broker profile not found' });
+
+    const { company_documents } = req.body;
+    const docString = typeof company_documents === 'object' ? JSON.stringify(company_documents) : company_documents;
+
+    const updated = await prisma.broker.update({
+      where: { id: broker.id },
+      data: {
+        company_documents: docString,
+        status: 'PENDING_APPROVAL'
+      }
+    });
+
+    res.status(200).json({ success: true, message: 'Documents submitted successfully', data: updated });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getQuoteRequests,
   getQuotations,
@@ -520,5 +542,6 @@ module.exports = {
   assignFleet,
   getApprovedFleetOwners,
   getApprovedPlantOwners,
-  assignPlant
+  assignPlant,
+  submitCompliance
 };

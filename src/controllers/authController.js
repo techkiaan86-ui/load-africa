@@ -1,32 +1,34 @@
 const { registerUser, registerDriver, loginUser } = require('../services/authService');
 const { z } = require('zod');
+const bcrypt = require('bcrypt');
 const { prisma } = require('../config/db');
+const { generateToken } = require('../utils/jwt');
 
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   role: z.enum(['CUSTOMER', 'DRIVER', 'FLEET_OWNER', 'PLANT_OWNER', 'BROKER']),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  phone: z.string().optional(),
-  companyName: z.string().optional(),
-  vatNumber: z.string().optional(),
-  numVehicles: z.number().int().optional(),
-  fleetTier: z.string().optional(),
-  operatingAreas: z.string().optional(),
-  servicesOffered: z.string().optional(),
-  notes: z.string().optional(),
-  address: z.string().optional(),
-  location_lat: z.number().optional(),
-  location_lng: z.number().optional(),
-  license: z.string().optional(),
-  pdp: z.string().optional(),
-  idDocument: z.string().optional(),
-  vehicleType: z.string().optional(),
-  vehicleReg: z.string().optional(),
-  licenseFront: z.string().optional(),
-  pdpDoc: z.string().optional(),
-  vehicleDoc: z.string().optional(),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  companyName: z.string().optional().nullable(),
+  vatNumber: z.string().optional().nullable(),
+  numVehicles: z.union([z.number().int(), z.string().transform(v => parseInt(v, 10))]).optional().nullable(),
+  fleetTier: z.string().optional().nullable(),
+  operatingAreas: z.string().optional().nullable(),
+  servicesOffered: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  location_lat: z.union([z.number(), z.string().transform(v => parseFloat(v))]).optional().nullable(),
+  location_lng: z.union([z.number(), z.string().transform(v => parseFloat(v))]).optional().nullable(),
+  license: z.string().optional().nullable(),
+  pdp: z.string().optional().nullable(),
+  idDocument: z.string().optional().nullable(),
+  vehicleType: z.string().optional().nullable(),
+  vehicleReg: z.string().optional().nullable(),
+  licenseFront: z.string().optional().nullable(),
+  pdpDoc: z.string().optional().nullable(),
+  vehicleDoc: z.string().optional().nullable(),
 });
 
 const driverRegisterSchema = z.object({
@@ -123,7 +125,8 @@ const register = async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ success: false, message: 'Validation Error', errors: error.errors });
+      const issueMsg = error.errors?.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join(', ');
+      return res.status(400).json({ success: false, message: issueMsg || 'Validation Error', errors: error.errors });
     }
     const prismaHandled = handlePrismaUniqueError(error, res);
     if (prismaHandled) return;
@@ -155,7 +158,8 @@ const registerDriverController = async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ success: false, message: 'Validation Error', errors: error.errors });
+      const issueMsg = error.errors?.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join(', ');
+      return res.status(400).json({ success: false, message: issueMsg || 'Validation Error', errors: error.errors });
     }
     const prismaHandled = handlePrismaUniqueError(error, res);
     if (prismaHandled) return;
@@ -175,7 +179,8 @@ const login = async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ success: false, message: 'Validation Error', errors: error.errors });
+      const issueMsg = error.errors?.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join(', ');
+      return res.status(400).json({ success: false, message: issueMsg || 'Validation Error', errors: error.errors });
     }
     res.status(401).json({ success: false, message: error.message });
   }
@@ -296,4 +301,99 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { register, registerDriver: registerDriverController, login, getMe, getApprovedFleetOwnersPublic, updateProfile };
+const changeCredentials = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newEmail, newPassword } = req.body;
+
+    if (!currentPassword) {
+      return res.status(400).json({ success: false, message: 'Purana (Current) password enter karna zaroori hai verification ke liye.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account nahi mila.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Purana (Current) password galat hai. Kripya sahi password enter karein.' });
+    }
+
+    const updateData = {};
+
+    if (newEmail && newEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+      const trimmedEmail = newEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        return res.status(400).json({ success: false, message: 'Valid email address enter karein.' });
+      }
+      
+      const existing = await prisma.user.findUnique({
+        where: { email: trimmedEmail }
+      });
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ success: false, message: 'Yeh email address pehle se kisi doosre account me registered hai.' });
+      }
+      updateData.email = trimmedEmail;
+    }
+
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'Naya password kam se kam 6 characters ka hona chahiye.' });
+      }
+      updateData.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ success: false, message: 'Naya Email ya Naya Password me se koi ek change karne ke liye enter karein.' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      include: {
+        customer: true,
+        driver: true,
+        fleet_owner: true,
+        broker: true,
+        plant_owner: true
+      }
+    });
+
+    const token = generateToken(updatedUser.id, updatedUser.role);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email aur Password successfully update ho gaya!',
+      data: {
+        token,
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          first_name: updatedUser.first_name,
+          last_name: updatedUser.last_name,
+          phone: updatedUser.phone,
+          avatar: updatedUser.avatar,
+          role: updatedUser.role,
+          status: updatedUser.status
+        }
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Credentials update karne me error aayi.' });
+  }
+};
+
+module.exports = { 
+  register, 
+  registerDriver: registerDriverController, 
+  login, 
+  getMe, 
+  getApprovedFleetOwnersPublic, 
+  updateProfile,
+  changeCredentials
+};

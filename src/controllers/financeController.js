@@ -639,32 +639,29 @@ const initializePaystackPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid invoice payable amount.' });
     }
 
-    // Check if there is already a PENDING payment record with reference
-    const existingPayment = await prisma.payment.findFirst({
-      where: { invoice_id: invoice.id, status: 'PENDING' },
-      orderBy: { created_at: 'desc' }
+    // Always generate a unique transaction reference for Paystack
+    const reference = `PAY-${booking.id.slice(0, 8)}-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Create or update pending payment record
+    await prisma.payment.create({
+      data: {
+        invoice_id: invoice.id,
+        amount: payableAmount,
+        payment_method: 'PAYSTACK',
+        transaction_id: reference,
+        status: 'PENDING'
+      }
     });
 
-    let reference = existingPayment?.transaction_id;
-    if (!reference) {
-      reference = `PAY-${booking.id.slice(0, 8)}-${Date.now()}`;
-      await prisma.payment.create({
-        data: {
-          invoice_id: invoice.id,
-          amount: payableAmount,
-          payment_method: 'PAYSTACK',
-          transaction_id: reference,
-          status: 'PENDING'
-        }
-      });
-    }
+    const clientOrigin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : 'http://localhost:5174');
+    const returnUrl = process.env.PAYSTACK_CALLBACK_URL || `${clientOrigin}/customer/payment/${booking.id}`;
 
     // Initialize Paystack transaction
     const paystackResult = await paystackService.initializePayment({
       email: req.user.email,
       amount: payableAmount,
       reference,
-      callbackUrl: process.env.PAYSTACK_CALLBACK_URL || `${req.headers.origin || 'http://localhost:5173'}/customer/booking-history`,
+      callbackUrl: returnUrl,
       metadata: {
         bookingId: booking.id,
         invoiceId: invoice.id,
