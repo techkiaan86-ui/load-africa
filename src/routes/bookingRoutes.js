@@ -1,6 +1,7 @@
 const express = require('express');
 const { 
   getActiveVehicleCategories,
+  addVehicleCategory,
   getQuoteRecommendations, 
   createBooking,
   getCustomerBookingsHistory,
@@ -17,6 +18,9 @@ const router = express.Router();
 
 // Fetch active vehicle categories for customer booking selection
 router.get('/vehicle-categories', getActiveVehicleCategories);
+
+// Add vehicle category (Fleet Owners / Transporters / Public creation)
+router.post('/vehicle-categories', addVehicleCategory);
 
 // Generate quote recommendations based on distance and weight
 router.post('/quote', getQuoteRecommendations);

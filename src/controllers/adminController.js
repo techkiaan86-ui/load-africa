@@ -657,6 +657,11 @@ const deleteUser = async (req, res, next) => {
     // The user requested permanent delete rules, so if all constraints pass, we could delete. 
     // We'll soft delete to keep audit integrity, or hard delete if really 0 relations.
     // Let's perform a hard delete if no relations exist.
+    try { await prisma.walletTransaction.deleteMany({ where: { wallet: { user_id: userId } } }); } catch (e) {}
+    try { await prisma.wallet.deleteMany({ where: { user_id: userId } }); } catch (e) {}
+    try { await prisma.admin.deleteMany({ where: { user_id: userId } }); } catch (e) {}
+    try { await prisma.notification.deleteMany({ where: { user_id: userId } }); } catch (e) {}
+
     await prisma.user.delete({ where: { id: userId } });
 
     await prisma.activityLog.create({

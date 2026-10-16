@@ -307,7 +307,7 @@ const changeCredentials = async (req, res) => {
     const { currentPassword, newEmail, newPassword } = req.body;
 
     if (!currentPassword) {
-      return res.status(400).json({ success: false, message: 'Purana (Current) password enter karna zaroori hai verification ke liye.' });
+      return res.status(400).json({ success: false, message: 'Current password is required for security verification.' });
     }
 
     const user = await prisma.user.findUnique({
@@ -315,12 +315,12 @@ const changeCredentials = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User account nahi mila.' });
+      return res.status(404).json({ success: false, message: 'User account not found.' });
     }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Purana (Current) password galat hai. Kripya sahi password enter karein.' });
+      return res.status(400).json({ success: false, message: 'Current password is incorrect. Please check and try again.' });
     }
 
     const updateData = {};
@@ -329,27 +329,27 @@ const changeCredentials = async (req, res) => {
       const trimmedEmail = newEmail.trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(trimmedEmail)) {
-        return res.status(400).json({ success: false, message: 'Valid email address enter karein.' });
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
       }
       
       const existing = await prisma.user.findUnique({
         where: { email: trimmedEmail }
       });
       if (existing && existing.id !== userId) {
-        return res.status(400).json({ success: false, message: 'Yeh email address pehle se kisi doosre account me registered hai.' });
+        return res.status(400).json({ success: false, message: 'This email address is already in use by another account.' });
       }
       updateData.email = trimmedEmail;
     }
 
     if (newPassword) {
       if (newPassword.length < 6) {
-        return res.status(400).json({ success: false, message: 'Naya password kam se kam 6 characters ka hona chahiye.' });
+        return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
       }
       updateData.password = await bcrypt.hash(newPassword, 10);
     }
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ success: false, message: 'Naya Email ya Naya Password me se koi ek change karne ke liye enter karein.' });
+      return res.status(400).json({ success: false, message: 'Please provide a new email address or new password to update.' });
     }
 
     const updatedUser = await prisma.user.update({
@@ -368,7 +368,7 @@ const changeCredentials = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Email aur Password successfully update ho gaya!',
+      message: 'Account credentials updated successfully!',
       data: {
         token,
         user: {
@@ -384,7 +384,7 @@ const changeCredentials = async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Credentials update karne me error aayi.' });
+    return res.status(500).json({ success: false, message: error.message || 'Failed to update account credentials.' });
   }
 };
 

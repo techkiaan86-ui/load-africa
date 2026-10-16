@@ -275,7 +275,7 @@ const DUMMY_USERS = {
   'sipho.zuma@load-driver.co.za': 'DRIVER',
   'fleet@loadafrica.co.za': 'FLEET_OWNER',
   'plant@loadafrica.co.za': 'PLANT_OWNER',
-  'admin@loadafrica.com': 'ADMIN',
+  'demoadmin@gmail.com': 'ADMIN',
   'lwazi.dlamini@loadafrica-broker.co.za': 'BROKER'
 };
 

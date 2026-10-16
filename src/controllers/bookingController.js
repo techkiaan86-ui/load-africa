@@ -34,6 +34,50 @@ const getActiveVehicleCategories = async (req, res, next) => {
 };
 
 /**
+ * POST /api/v1/bookings/vehicle-categories
+ * Add vehicle category (Fleet Owners / Transporters / Public creation)
+ */
+const addVehicleCategory = async (req, res, next) => {
+  try {
+    const { name, description, base_price_per_km, capacity_tons } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Category name is required.' });
+    }
+    const cleanName = name.trim();
+    let existing = await prisma.vehicleCategory.findFirst({
+      where: { name: cleanName, is_deleted: false }
+    });
+    if (existing) {
+      if (!existing.is_active) {
+        existing = await prisma.vehicleCategory.update({
+          where: { id: existing.id },
+          data: { is_active: true }
+        });
+        return res.status(200).json({ success: true, message: 'Vehicle category reactivated successfully.', data: existing });
+      }
+      return res.status(200).json({ success: true, message: 'Vehicle category already exists.', data: existing });
+    }
+
+    const rate = Number(base_price_per_km) || 15.0;
+    const capacity = Number(capacity_tons) || 1.0;
+
+    const newCategory = await prisma.vehicleCategory.create({
+      data: {
+        name: cleanName,
+        description: description || 'Added by Fleet Owner',
+        base_price_per_km: rate,
+        capacity_tons: capacity,
+        is_active: true
+      }
+    });
+
+    res.status(201).json({ success: true, message: 'Vehicle category created successfully.', data: newCategory });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
  * Handles generating a quote recommendation (Step 4 of Booking Wizard)
  */
 const getQuoteRecommendations = async (req, res, next) => {
@@ -598,6 +642,7 @@ const cancelBooking = async (req, res, next) => {
 
 module.exports = {
   getActiveVehicleCategories,
+  addVehicleCategory,
   getQuoteRecommendations,
   createBooking,
   getCustomerBookingsHistory,
